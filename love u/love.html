@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Cuore I Love You - Cliccami</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            transform-origin: center;
+        }
+
+        /* Pulsante centrale */
+        #audio-control {
+            position: absolute;
+            background: transparent;
+            color: #ffcce6;
+            border: 2px solid #ffcce6;
+            padding: 15px 30px;
+            cursor: pointer;
+            border-radius: 50px;
+            z-index: 1000;
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 15px rgba(255, 204, 230, 0.4);
+            transition: 0.4s;
+        }
+
+        #audio-control:hover {
+            background: #ffcce6;
+            color: #000;
+            box-shadow: 0 0 30px #ffcce6;
+        }
+
+        /* Cuore */
+        #heart-container {
+            display: none; 
+            position: relative;
+            width: 800px; 
+            height: 800px;
+            /* La pulsazione ora è gestita dinamicamente dal JS a ritmo di musica! */
+        }
+
+        .love-text {
+            position: absolute;
+            color: #ffcce6;
+            font-weight: 900;
+            font-size: 14px;
+            white-space: nowrap;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 182, 193, 0.8), 0 0 25px rgba(255, 20, 147, 0.4);
+            opacity: 1;
+            animation: shadow-wave 6s infinite linear, floating 2s infinite ease-in-out;
+        }
+
+        @keyframes shadow-wave {
+            0%, 15%, 45%, 100% { opacity: 1; filter: blur(0px); }
+            25%, 35% { opacity: 0.1; filter: blur(2px); }
+        }
+
+        @keyframes floating {
+            0%, 100% { transform: translate(0, 0); }
+            33% { transform: translate(1px, -1.5px) scale(1.02); }
+            66% { transform: translate(-1px, 1px) scale(0.98); }
+        }
+
+        @keyframes pulse-heart {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+    </style>
+</head>
+<body>
+
+<button id="audio-control">CLICCAMI</button>
+
+<audio id="myAudio" loop>
+  <source src="song.mp3" type="audio/mpeg">
+</audio>
+
+<div id="heart-container"></div>
+
+<script>
+    const container = document.getElementById('heart-container');
+    const audio = document.getElementById('myAudio');
+    const btn = document.getElementById('audio-control');
+    
+    const totalWords = 80; 
+    const duration = 6; 
+
+    // CREA LE SCRITTE (CUORE - NON TOCCATO)
+    for (let i = 0; i < totalWords; i++) {
+        const span = document.createElement('span');
+        span.className = 'love-text';
+        span.innerText = 'I love you';
+
+        const t = (i / totalWords) * 2 * Math.PI;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+
+        const posX = 400 + x * 18; 
+        const posY = 350 + y * 22; 
+
+        span.dataset.finalX = posX;
+        span.dataset.finalY = posY;
+
+        span.style.left = `${posX}px`;
+        span.style.top = `${posY}px`;
+
+        span.style.animationDelay = `${(i / totalWords) * duration}s, ${Math.random() * 2}s`;
+
+        container.appendChild(span);
+    }
+
+    // AUDIO VISUALIZER (Ritmo di musica)
+    let audioCtx;
+    function setupAudioVisualizer() {
+        if (audioCtx) return; // Evita doppi avvii
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        const analyser = audioCtx.createAnalyser();
+        
+        const source = audioCtx.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        
+        analyser.fftSize = 256;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        
+        function renderFrame() {
+            requestAnimationFrame(renderFrame);
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Prende i bassi (primi valori) per rilevare i battiti principali
+            let bassSum = 0;
+            for(let i = 0; i < 6; i++) {
+                bassSum += dataArray[i];
+            }
+            let bassAvg = bassSum / 6;
+            
+            // Usa una curva esponenziale per far risaltare solo i colpi forti (i beat)
+            let punch = Math.pow(bassAvg / 255, 3); 
+            let scale = 1 + punch * 0.25; // Ingrandisce fino a un +25% sui colpi forti
+            
+            container.style.transform = `scale(${scale})`;
+        }
+        renderFrame();
+    }
+
+    // CLICK
+    btn.addEventListener('click', async () => {
+        setupAudioVisualizer(); // Avvia l'analizzatore
+        audio.play();
+        btn.style.display = 'none';
+        container.style.display = 'block';
+
+        await fastIntroAnimation();
+    });
+
+    // NEW: ANIMAZIONE TRENO CON CAMERA TRACKING
+    function fastIntroAnimation() {
+        return new Promise((resolve) => {
+            let wordsArray = Array.from(document.querySelectorAll('.love-text'));
+            
+            // Calcola l'angolo per ordinare in senso orario (partendo dall'alto - ore 12)
+            wordsArray.forEach(word => {
+                const fx = parseFloat(word.dataset.finalX);
+                const fy = parseFloat(word.dataset.finalY);
+                let angle = Math.atan2(fy - 350, fx - 400);
+                if (angle < -Math.PI / 2) {
+                    angle += 2 * Math.PI; 
+                }
+                word.dataset.angle = angle;
+            });
+            
+            // Ordina in senso orario
+            wordsArray.sort((a, b) => parseFloat(a.dataset.angle) - parseFloat(b.dataset.angle));
+
+            // FASE 1: Zoom in aggressivo (Gestito inline)
+            document.body.style.transition = "transform 0.6s cubic-bezier(0.1, 0.9, 0.2, 1)";
+            document.body.style.transform = "scale(3) translateX(0px)";
+
+            // Posiziona tutte le parole al centro esatto (dietro il pulsante)
+            wordsArray.forEach((word) => {
+                word.style.transition = "none";
+                word.style.left = "400px"; 
+                word.style.top = "400px"; 
+                word.style.transform = "scale(0.5)";
+                word.style.opacity = "0";
+            });
+
+            container.offsetHeight; // Trigger reflow
+
+            // FASE 2: Il treno parte in modo violentissimo verso destra
+            setTimeout(() => {
+                wordsArray.forEach((word, i) => {
+                    const delay = i * 35; // Fila stretta
+
+                    setTimeout(() => {
+                        word.style.transition = "all 1s linear";
+                        word.style.opacity = "1";
+                        word.style.left = "2000px"; // Lontano a destra
+                        word.style.transform = "scale(2)";
+                    }, delay);
+                });
+            }, 50);
+
+            // FASE 2.5: CAMERA TRACKING
+            setTimeout(() => {
+                // Dopo mezzo secondo (500ms dal treno), la camera fa un pan verso destra per seguire la prima parola
+                // Traslando il body a sinistra, la telecamera "vola" a destra
+                document.body.style.transition = "transform 2.5s cubic-bezier(0.25, 1, 0.5, 1)";
+                document.body.style.transform = "scale(3) translateX(-400px)"; 
+            }, 550);
+
+            // FASE 3: Dopo 3 secondi formano il cuore in senso orario con lo zoom-out
+            setTimeout(() => {
+                // Inizia lo zoom-out e la telecamera torna al centro
+                document.body.style.transition = "transform 3s cubic-bezier(0.34, 1.56, 0.64, 1)";
+                document.body.style.transform = "scale(1) translateX(0px)";
+
+                wordsArray.forEach((word, i) => {
+                    // Blocchiamo il treno ovunque si trovi in questo istante
+                    const currentLeft = parseFloat(window.getComputedStyle(word).left) || 400;
+                    word.style.transition = "none";
+                    word.style.left = currentLeft + "px";
+                    
+                    container.offsetHeight; // Reflow
+
+                    // Le scritte si dispongono per formare il cuore
+                    const formDelay = i * 15; // Sequenza oraria
+                    setTimeout(() => {
+                        word.style.transition = "all 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)";
+                        word.style.left = word.dataset.finalX + "px";
+                        word.style.top = word.dataset.finalY + "px";
+                        word.style.transform = "scale(1)";
+                    }, formDelay);
+                });
+
+                // Risolvi la promise al termine di tutte le animazioni
+                setTimeout(() => {
+                    resolve();
+                }, (wordsArray.length * 15) + 1500);
+
+            }, 3000); 
+        });
+    }
+</script>
+
+</body>
+</html>
